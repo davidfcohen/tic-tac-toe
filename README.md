@@ -1,2 +1,2 @@
-# Tic-tac-toe Minimax
+# Tic-tac-toe
 This project implements a tic-tac-toe AI written in C using the minimax algorithm.
