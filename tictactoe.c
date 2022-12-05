@@ -3,33 +3,51 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <getopt.h>
 
 struct State {
 	char grid[3][3];
 	char player, opponent, empty;
 };
 
+int g_depth, g_nodes;
+bool g_prune, g_verbose;
+
 /* Game */
+
 void play_human(struct State *state);
 void play_self(struct State *state);
 void print_grid(struct State *state);
+void move(struct State *state, int row, int col);
+void decide(struct State *state, int *best_row, int *best_col, int depth);
 void end_turn(struct State *state);
-bool is_game_over(struct State *state);
 
 /* Minimax */
-void decide(struct State *state, int *row, int *col, int depth);
+
 int maximize(struct State *state, int depth);
 int minimize(struct State *state, int depth);
-bool is_grid_full(struct State *state);
-bool is_illegal_move(struct State *state, int row, int col);
+int maximize_prune(struct State* state, int depth, int alpha, int beta);
+int minimize_prune(struct State* state, int depth, int alpha, int beta);
 
 /* Evaluation */
+
 int evaluate(struct State *state);
 int evaluate_horizontal(struct State *state, int row);
 int evaluate_vertical(struct State *state, int col);
 int evaluate_diagonal(struct State *state);
 
+/* Helper Functions */
+
+bool is_game_over(struct State *state);
+bool is_grid_full(struct State *state);
+bool is_illegal_move(struct State *state, int row, int col);
+int min(int a, int b);
+int max(int a, int b);
+
 int main(int argc, char *argv[]) {
+	int opt;
+	bool self;
+
 	struct State initial = {
 		{{' ', ' ', ' '},
 		 {' ', ' ', ' '},
@@ -37,17 +55,46 @@ int main(int argc, char *argv[]) {
 		'X', 'O', ' '
 	};
 
-	if (argc > 1) {
-		if (strcmp(argv[1], "--self") == 0) {
-			play_self(&initial);
-			return 0;
+	g_depth = 7;
+	while((opt = getopt(argc, argv, "spd:vh")) != -1) {
+		switch (opt) {
+			case 's':
+				self = true;
+				break;
+			case 'p':
+				g_prune = true;
+				break;
+			case 'd':
+				if (*optarg  < '0' || *optarg > '7') {
+					printf("The depth option must be between 1 and 7 inclusive.\n");
+					return 0;
+				}
+				g_depth = atoi(optarg);
+				break;
+			case 'v':
+				g_verbose = true;
+				break;
+			case 'h':
+			case '?':
+				printf("%s [-s] [-p] [-d [0-7]] [-v]\n", argv[0]);
+				printf("\t-s: Simulate a full game of tic-tac-toe.\n");
+				printf("\t-p: Use alpha-beta pruning.\n");
+				printf("\t-d: Set the maximum depth of the decision tree (0-7).\n");
+				printf("\t-v: Output the number of expanded nodes.\n");
+				return 0;
 		}
 	}
 
-	play_human(&initial);
+	if (self) {
+		play_self(&initial);
+		return 0;
+	}
 
+	play_human(&initial);
 	return 0;
 }
+
+/* Game */
 
 void play_human(struct State *state) {
 	int row, col;
@@ -58,8 +105,7 @@ void play_human(struct State *state) {
 			printf("Your move (row, col): ");
 			scanf("%d,%d", &row, &col);
 		} while (is_illegal_move(state, row - 1, col - 1));
-
-		state->grid[row - 1][col - 1] = state->player;
+		move(state, row - 1, col - 1);
 		print_grid(state);
 		end_turn(state);
 		printf("\n");
@@ -67,11 +113,15 @@ void play_human(struct State *state) {
 		if(is_game_over(state))
 			break;
 
-		decide(state, &row, &col, 8);
-		state->grid[row][col] = state->player;
-		printf("%c plays (%d, %d)\n", state->player, row, col);
+		decide(state, &row, &col, g_depth);
+		move(state, row, col);
+		printf("%c plays (%d, %d)\n", state->player, row + 1, col + 1);
 		print_grid(state);
 		end_turn(state);
+		if (g_verbose) {
+			printf("Minimax expanded %d nodes this move.\n", g_nodes);
+			g_nodes = 0;
+		}
 		printf("\n");
 	}
 }
@@ -81,18 +131,22 @@ void play_self(struct State *state) {
 
 	srand((unsigned)time(NULL));
 	row = rand() % 3, col = rand() % 3;
-	state->grid[row][col] = state->player;
+	move(state, row, col);
 	printf("%c plays (%d, %d)\n", state->player, row, col);
 	print_grid(state);
 	end_turn(state);
 	printf("\n");
 
 	while(!is_game_over(state)) {
-		decide(state, &row, &col, 8);
-		state->grid[row][col] = state->player;
+		decide(state, &row, &col, g_depth);
+		move(state, row, col);
 		printf("%c plays (%d, %d)\n", state->player, row, col);
 		print_grid(state);
 		end_turn(state);
+		if (g_verbose) {
+			printf("Minimax expanded %d nodes.\n", g_nodes);
+			g_nodes = 0;
+		}
 		printf("\n");
 	}
 
@@ -112,8 +166,13 @@ void print_grid(struct State *state) {
 		for (col = 0; col < 3; ++col) {
 			printf("[%c]", state->grid[row][col]);
 		}
-		printf("\n");
+		printf("%d\n", row + 1);
 	}
+	printf(" 1  2  3\n");
+}
+
+void move(struct State *state, int row, int col) {
+	state->grid[row][col] = state->player;
 }
 
 void end_turn(struct State *state) {
@@ -122,10 +181,6 @@ void end_turn(struct State *state) {
 	temp = state->player;
 	state->player = state->opponent;
 	state->opponent = temp;
-}
-
-bool is_game_over(struct State *state) {
-	return (is_grid_full(state) || evaluate(state));
 }
 
 void decide(struct State *state, int *best_row, int *best_col, int depth) {
@@ -143,7 +198,10 @@ void decide(struct State *state, int *best_row, int *best_col, int depth) {
 				is_first_availible_move = false;
 			}
 			state->grid[row][col] = state->player;
-			value = minimize(state, depth);
+			if (g_prune)
+				value = minimize_prune(state, depth, -10, 10);
+			else
+				value = minimize(state, depth);
 			state->grid[row][col] = state->empty;
 			if (value > best_value) {
 				best_value = value;
@@ -154,13 +212,16 @@ void decide(struct State *state, int *best_row, int *best_col, int depth) {
 	}
 }
 
+/* Minimax */
+
 int maximize(struct State *state, int depth) {
 	int row, col, value, max_value;
-	bool is_terminal;
+	
+	if(g_verbose)
+		++g_nodes;
 
-	is_terminal = ((value = evaluate(state)) || is_grid_full(state));
-	if (is_terminal || depth == 0)
-		return value;
+	if (is_game_over(state) || depth == 0)
+		return evaluate(state);
 
 	max_value = -10;
 	for (row = 0; row < 3; ++row) {
@@ -168,10 +229,9 @@ int maximize(struct State *state, int depth) {
 			if (is_illegal_move(state, row, col))
 				continue;
 			state->grid[row][col] = state->player;
-			value = minimize(state, depth - 1);
+			value = minimize(state, depth - 1) - depth;
 			state->grid[row][col] = state->empty;
-			if (value > max_value)
-				max_value = value;
+			max_value = max(max_value, value);
 		}
 	}
 
@@ -180,11 +240,12 @@ int maximize(struct State *state, int depth) {
 
 int minimize(struct State *state, int depth) {
 	int row, col, value, min_value;
-	bool is_terminal;
 
-	is_terminal = ((value = evaluate(state)) || is_grid_full(state));
-	if (is_terminal || depth == 0)
-		return value;
+	if(g_verbose)
+		++g_nodes;
+
+	if (is_game_over(state) || depth == 0)
+		return evaluate(state);
 
 	min_value = 10;
 	for (row = 0; row < 3; ++row) {	
@@ -192,33 +253,70 @@ int minimize(struct State *state, int depth) {
 			if (is_illegal_move(state, row, col))
 				continue;
 			state->grid[row][col] = state->opponent;
-			value = maximize(state, depth - 1);
+			value = maximize(state, depth - 1) + depth;
 			state->grid[row][col] = state->empty;
-			if (value < min_value)
-				min_value = value;
+			min_value = min(min_value, value);
 		}
 	}
 
 	return min_value;
 }
 
-bool is_illegal_move(struct State* state, int row, int col) {
-	bool is_empty;
+int maximize_prune(struct State* state, int depth, int alpha, int beta) {
+	int row, col, value, max_value;
+	
+	if(g_verbose)
+		++g_nodes;
 
-	is_empty = state->grid[row][col] == state->empty;
-	return (!is_empty || row < 0 || col < 0 || row > 2 || row > 2);
+	if (is_game_over(state) || depth == 0)
+		return evaluate(state);
+
+	max_value = -10;
+	for (row = 0; row < 3; ++row) {
+		for (col = 0; col < 3; ++col) {
+			if (is_illegal_move(state, row, col))
+				continue;
+			state->grid[row][col] = state->player;
+			value = minimize_prune(state, depth - 1, alpha, beta) - depth;
+			state->grid[row][col] = state->empty;
+			max_value = max(max_value, value);
+			if (value >= beta)
+				return max_value;
+			alpha = max(alpha, value);
+		}
+	}
+
+	return max_value;
 }
 
-bool is_grid_full(struct State *state) {
-	int row, col;
+int minimize_prune(struct State* state, int depth, int alpha, int beta) {
+	int row, col, value, min_value;
 
-	for (row = 0; row < 3; ++row)
-		for (col = 0; col < 3; ++col)
-			if (state->grid[row][col] == state->empty)
-				return false;
+	if(g_verbose)
+		++g_nodes;
 
-	return true;
+	if (is_game_over(state) || depth == 0)
+		return evaluate(state);
+
+	min_value = 10;
+	for (row = 0; row < 3; ++row) {	
+		for (col = 0; col < 3; ++col) {
+			if (is_illegal_move(state, row, col))
+				continue;
+			state->grid[row][col] = state->opponent;
+			value = maximize_prune(state, depth - 1, alpha, beta) + depth;
+			state->grid[row][col] = state->empty;
+			min_value = min(min_value, value);
+			if (value <= alpha)
+				return min_value;
+			beta = min(beta, value);
+		}
+	}
+
+	return min_value;
 }
+
+/* Evaluation */
 
 int evaluate(struct State *state) {
 	int i, value;
@@ -239,9 +337,6 @@ int evaluate(struct State *state) {
 
 int evaluate_horizontal(struct State *state, int row) {
 	bool is_win, is_loss;
-
-	if (row < 0 || row > 2)
-		return 0;
 
 	is_win = (state->player == state->grid[row][0] && 
 			  state->player == state->grid[row][1] && 
@@ -304,4 +399,39 @@ int evaluate_diagonal(struct State *state) {
 		return -10;
 
 	return 0;
+}
+
+/* Helper Functions */
+
+bool is_game_over(struct State *state) {
+	return (is_grid_full(state) || evaluate(state));
+}
+
+bool is_illegal_move(struct State* state, int row, int col) {
+	bool is_empty;
+
+	is_empty = state->grid[row][col] == state->empty;
+	return (!is_empty || row < 0 || col < 0 || row > 2 || row > 2);
+}
+
+bool is_grid_full(struct State *state) {
+	int row, col;
+
+	for (row = 0; row < 3; ++row)
+		for (col = 0; col < 3; ++col)
+			if (state->grid[row][col] == state->empty)
+				return false;
+	return true;
+}
+
+int max(int a, int b) {
+	if (a > b)
+		return a;
+	return b;
+}
+
+int min(int a, int b) {
+	if (a < b)
+		return a;
+	return b;
 }
