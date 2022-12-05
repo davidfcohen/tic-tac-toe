@@ -124,7 +124,7 @@ void play_human(struct State *state) {
 
 		decide(state, &row, &col, g_depth);
 		move(state, row, col);
-		printf("%c plays %c%c:\n", state->player, col + 'a', (row - 3) * -1);
+		printf("%c plays %c%d:\n", state->player, col + 'a', (row - 3) * -1);
 		print_grid(state);
 		end_turn(state);
 		if (g_verbose) {
