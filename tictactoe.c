@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -66,7 +67,7 @@ int main(int argc, char *argv[]) {
 				break;
 			case 'd':
 				if (*optarg  < '0' || *optarg > '7') {
-					printf("The depth option must be between 1 and 7 inclusive.\n");
+					printf("The depth argument must be between 1 and 7 inclusive.\n");
 					return 0;
 				}
 				g_depth = atoi(optarg);
@@ -76,7 +77,7 @@ int main(int argc, char *argv[]) {
 				break;
 			case 'h':
 			case '?':
-				printf("%s [-s] [-p] [-d [0-7]] [-v]\n", argv[0]);
+				printf("%s [-s] [-p] [-d depth] [-v]\n", argv[0]);
 				printf("\t-s: Simulate a full game of tic-tac-toe.\n");
 				printf("\t-p: Use alpha-beta pruning.\n");
 				printf("\t-d: Set the maximum depth of the decision tree (0-7).\n");
@@ -98,14 +99,22 @@ int main(int argc, char *argv[]) {
 
 void play_human(struct State *state) {
 	int row, col;
+	char ch;
 
+	printf("\n");
+	print_grid(state);
+	printf("\n");
 	while (!is_game_over(state)) {
 		row = -1, col = -1;
 		do {
-			printf("Your move (row, col): ");
-			scanf("%d,%d", &row, &col);
-		} while (is_illegal_move(state, row - 1, col - 1));
-		move(state, row - 1, col - 1);
+			printf("Your move: ");
+			while((ch = getchar()) != '\n') {
+				col = ch - 'a';
+				ch = tolower(getchar());
+				row = (ch - '0' - 3) * -1;
+			}
+		} while (is_illegal_move(state, row, col));
+		move(state, row, col);
 		print_grid(state);
 		end_turn(state);
 		printf("\n");
@@ -115,11 +124,11 @@ void play_human(struct State *state) {
 
 		decide(state, &row, &col, g_depth);
 		move(state, row, col);
-		printf("%c plays (%d, %d)\n", state->player, row + 1, col + 1);
+		printf("%c plays %c%c:\n", state->player, col + 'a', (row - 3) * -1);
 		print_grid(state);
 		end_turn(state);
 		if (g_verbose) {
-			printf("Minimax expanded %d nodes this move.\n", g_nodes);
+			printf("Minimax expanded %d nodes for this move.\n", g_nodes);
 			g_nodes = 0;
 		}
 		printf("\n");
@@ -132,7 +141,7 @@ void play_self(struct State *state) {
 	srand((unsigned)time(NULL));
 	row = rand() % 3, col = rand() % 3;
 	move(state, row, col);
-	printf("%c plays (%d, %d)\n", state->player, row, col);
+	printf("%c plays %c%d:\n", state->player, col + 'a', (row - 3) * -1);
 	print_grid(state);
 	end_turn(state);
 	printf("\n");
@@ -140,7 +149,7 @@ void play_self(struct State *state) {
 	while(!is_game_over(state)) {
 		decide(state, &row, &col, g_depth);
 		move(state, row, col);
-		printf("%c plays (%d, %d)\n", state->player, row, col);
+		printf("%c plays %c%d:\n", state->player, col + 'a', (row - 3) * -1);
 		print_grid(state);
 		end_turn(state);
 		if (g_verbose) {
@@ -163,12 +172,13 @@ void print_grid(struct State *state) {
 	int row, col;
 
 	for (row = 0; row < 3; ++row) {
+		printf("%d ", (row - 3) * -1);
 		for (col = 0; col < 3; ++col) {
 			printf("[%c]", state->grid[row][col]);
 		}
-		printf("%d\n", row + 1);
+		printf("\n");
 	}
-	printf(" 1  2  3\n");
+	printf("   a  b  c\n");
 }
 
 void move(struct State *state, int row, int col) {
