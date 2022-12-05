@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
 				g_prune = true;
 				break;
 			case 'd':
-				if (*optarg  < '0' || *optarg > '7') {
+				if (*optarg  < '1' || *optarg > '7') {
 					printf("The depth argument must be between 1 and 7 inclusive.\n");
 					return 0;
 				}
@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
 				printf("%s [-s] [-p] [-d depth] [-v]\n", argv[0]);
 				printf("\t-s: Simulate a full game of tic-tac-toe.\n");
 				printf("\t-p: Use alpha-beta pruning.\n");
-				printf("\t-d: Set the maximum depth of the decision tree (0-7).\n");
+				printf("\t-d: Set the maximum depth of the decision tree (1-7).\n");
 				printf("\t-v: Output the number of expanded nodes.\n");
 				return 0;
 		}
