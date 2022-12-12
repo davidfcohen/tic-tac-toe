@@ -6,4 +6,5 @@ tictactoe [-s] [-p] [-d depth] [-v]
 	-p: Use alpha-beta pruning.
 	-d: Set the maximum depth of the decision tree (1-7).
 	-v: Output the number of nodes expanded by minimax.
+	-O: Play as O.
 ```
