@@ -187,9 +187,11 @@ void play_self(struct State *state) {
 void get_move(int *row, int *col) {
 	char ch;
 
-	while((ch = getchar()) != '\n') {
-		*col = ch - 'a';
-		ch = tolower(getchar());
+	*row = -1, *col = -1;
+	while ((ch = getchar()) != '\n') {
+		*col = tolower(ch) - 'a';
+		if ((ch = getchar()) == '\n')
+			break;
 		*row = (ch - '0' - 3) * -1;
 	}
 }
