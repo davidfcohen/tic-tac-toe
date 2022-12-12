@@ -12,14 +12,16 @@ struct State {
 };
 
 int g_depth, g_nodes;
-bool g_self, g_prune, g_verbose;
+bool g_self, g_prune, g_verbose, g_play_as_O;
 
 // Game
 
 void play_human(struct State *state);
+void play_as_O(struct State *state);
 void play_self(struct State *state);
 void get_move(int *row, int *col);
 void print_grid(struct State *state);
+void print_move(struct State *state, int row, int col);
 void print_winner(struct State *state);
 void move(struct State *state, int row, int col);
 void end_turn(struct State *state);
@@ -55,7 +57,7 @@ int main(int argc, char *argv[]) {
 	};
 
 	g_depth = 7;
-	while((opt = getopt(argc, argv, "spd:vh")) != -1) {
+	while((opt = getopt(argc, argv, "spd:vOh")) != -1) {
 		switch (opt) {
 			case 's':
 				g_self = true;
@@ -73,19 +75,28 @@ int main(int argc, char *argv[]) {
 			case 'v':
 				g_verbose = true;
 				break;
+			case 'O':
+				g_play_as_O = true;
+				break;
 			case 'h':
 			case '?':
-				printf("%s [-s] [-p] [-d depth] [-v]\n", argv[0]);
+				printf("%s [-s] [-p] [-d depth] [-v] [-O]\n", argv[0]);
 				printf("\t-s: Simulate a full game of tic-tac-toe.\n");
 				printf("\t-p: Use alpha-beta pruning.\n");
 				printf("\t-d: Set the maximum depth of the decision tree (1-7).\n");
 				printf("\t-v: Output the number of nodes expanded by minimax.\n");
+				printf("\t-O: Play as O.\n");
 				return 0;
 		}
 	}
 
 	if (g_self) {
 		play_self(&initial);
+		return 0;
+	}
+
+	if (g_play_as_O) {
+		play_as_O(&initial);
 		return 0;
 	}
 
@@ -100,7 +111,6 @@ void play_human(struct State *state) {
 	
 	printf("\n");
 	print_grid(state);
-	printf("\n");
 
 	while (!is_game_over(state)) {
 		
@@ -111,21 +121,41 @@ void play_human(struct State *state) {
 		move(state, row, col);
 		print_grid(state);
 		end_turn(state);
-		printf("\n");
 
 		if(is_game_over(state))
 			break;
 
 		decide(state, &row, &col, g_depth);
 		move(state, row, col);
-		printf("%c plays %c%d:\n", state->player, col + 'a', (row - 3) * -1);
+		print_move(state, row, col);
 		print_grid(state);
 		end_turn(state);
-		if (g_verbose) {
-			printf("Minimax expanded %d nodes to find this move.\n", g_nodes);
-			g_nodes = 0;
-		}
-		printf("\n");
+	}
+
+	print_winner(state);
+}
+
+void play_as_O(struct State *state) {
+	int row, col;
+
+	printf("\n");
+	while (!is_game_over(state)) {
+		decide(state, &row, &col, g_depth);
+		move(state, row, col);
+		print_move(state, row, col);
+		print_grid(state);
+		end_turn(state);
+
+		if(is_game_over(state))
+			break;
+
+		do {
+			printf("Your move: ");
+			get_move(&row, &col);
+		} while (is_illegal_move(state, row, col));
+		move(state, row, col);
+		print_grid(state);
+		end_turn(state);
 	}
 
 	print_winner(state);
@@ -134,25 +164,21 @@ void play_human(struct State *state) {
 void play_self(struct State *state) {
 	int row, col;
 
+	printf("\n");
+
 	srand((unsigned)time(NULL));
 	row = rand() % 3, col = rand() % 3;
 	move(state, row, col);
-	printf("%c plays %c%d:\n", state->player, col + 'a', (row - 3) * -1);
+	print_move(state, row, col);
 	print_grid(state);
 	end_turn(state);
-	printf("\n");
 
 	while(!is_game_over(state)) {
 		decide(state, &row, &col, g_depth);
 		move(state, row, col);
-		printf("%c plays %c%d:\n", state->player, col + 'a', (row - 3) * -1);
+		print_move(state, row, col);
 		print_grid(state);
 		end_turn(state);
-		if (g_verbose) {
-			printf("Minimax expanded %d nodes to find this move.\n", g_nodes);
-			g_nodes = 0;
-		}
-		printf("\n");
 	}
 
 	print_winner(state);
@@ -178,7 +204,17 @@ void print_grid(struct State *state) {
 		}
 		printf("\n");
 	}
-	printf("   a  b  c\n");
+	printf("   a  b  c\n\n");
+}
+
+void print_move(struct State *state, int row, int col) {
+	printf("%c plays %c%d: ", state->player, col + 'a', (row - 3) * -1);
+	if (g_verbose) {
+		printf("Minimax expanded %d nodes.\n", g_nodes);
+		g_nodes = 0;
+		return;
+	}
+	printf("\n");
 }
 
 void print_winner(struct State *state) {
